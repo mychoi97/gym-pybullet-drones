@@ -12,7 +12,6 @@ import numpy as np
 import pybullet as p
 import pybullet_data
 import gymnasium as gym
-import cv2
 from gym_pybullet_drones.utils.enums import DroneModel, Physics, ImageType
 import csv
 import random
@@ -43,7 +42,6 @@ class BaseAviary(gym.Env):
                  vision_attributes=False,
                  output_folder='results',
                  num_obs: int = 4,
-                 env_level: int = 1,
                  num_cylinders: int = 0,
                  ):
         """Initialization of a generic aviary environment.
@@ -224,13 +222,13 @@ class BaseAviary(gym.Env):
         self._startVideoRecording()
 
         ############################################ 바꾼 부분 ###################################################################################################################
-        self.ENV_LEVEL = env_level
+        self.ENV_LEVEL = 1
 
         self.NUM_OBS = num_obs
         self.NUM_CYLINDERS = num_cylinders
 
-        self.NUM_LIDAR_RAYS = 48
-        self.LIDAR_RANGE = 10
+        self.NUM_LIDAR_RAYS = 36
+        self.LIDAR_RANGE = 1.0
 
         self.init_seed()
 
@@ -283,10 +281,17 @@ class BaseAviary(gym.Env):
                 self.prev_pos[0, i, :] = pos[0, i, :]
         self.frame_counter += 1
 
-    # def more_drone(self):
-    #     self.NUM_DRONES += 1
-    #     self.ctrl = [DSLPIDControl(drone_model=DroneModel.CF2X) for i in range(self.NUM_DRONES)]
-    #     self.reset()
+    def next_level(self):
+        if self.ENV_LEVEL < 10:
+            self.ENV_LEVEL += 1
+            self.init_seed()
+        else :
+            print("You reached the maximum level")
+
+    def more_drone(self):
+        self.NUM_DRONES += 1
+        self.ctrl = [DSLPIDControl(drone_model=DroneModel.CF2X) for i in range(self.NUM_DRONES)]
+        self.reset()
 
         ################################################ 추가된 부분 ##################################################################################################################################################################
     def _get_randomized_target(self):
@@ -297,7 +302,7 @@ class BaseAviary(gym.Env):
         ############# For test ################
         # random_x = 6.0
         # random_y = 0.0
-        self.GAP_RADIUS = 1.0
+        # self.GAP_RADIUS = 1.0
 
         self.TARGET_POS = [random_x+2, random_y,  1]
         self.WALL_POS = [random_x, random_y, 1]
@@ -350,48 +355,48 @@ class BaseAviary(gym.Env):
         # for i in range(self.NUM_DRONES):
         #     p.setCollisionFilterGroupMask(self.DRONE_IDS[i], -1, i, group2, physicsClientId=self.CLIENT)
 
-        p.setCollisionFilterGroupMask(self.target_ID1, -1, group2, 1, physicsClientId=self.CLIENT)
-        p.setCollisionFilterGroupMask(self.target_ID2, -1, group2, 1, physicsClientId=self.CLIENT)
-        p.setCollisionFilterGroupMask(self.target_ID3, -1, group2, 1, physicsClientId=self.CLIENT)
-        p.setCollisionFilterGroupMask(self.target_ID4, -1, group2, 1, physicsClientId=self.CLIENT)
-        p.setCollisionFilterGroupMask(self.target_ID5, -1, group2, 1, physicsClientId=self.CLIENT)
+        p.setCollisionFilterGroupMask(self.target_ID1, -1, group2, 0, physicsClientId=self.CLIENT)
+        p.setCollisionFilterGroupMask(self.target_ID2, -1, group2, 0, physicsClientId=self.CLIENT)
+        p.setCollisionFilterGroupMask(self.target_ID3, -1, group2, 0, physicsClientId=self.CLIENT)
+        p.setCollisionFilterGroupMask(self.target_ID4, -1, group2, 0, physicsClientId=self.CLIENT)
+        p.setCollisionFilterGroupMask(self.target_ID5, -1, group2, 0, physicsClientId=self.CLIENT)
 
         ######################## 실린더 좌표 #########################
-        # Parameters
-        min_x, max_x = 2, (self.ENV_LEVEL*0.5 - 2)
-        min_y, max_y = -4, 4
-        # n = 10  # Number of coordinates to generate
-        min_distance = 1.5  # Minimum distance between any two points
-        max_attempts = 10000  # Maximum attempts to find a valid point
-        fixed_z = 1  # Fixed z-coordinate
+        # # Parameters
+        # min_x, max_x = 2, 4
+        # min_y, max_y = -4, 4
+        # # n = 10  # Number of coordinates to generate
+        # min_distance = 1.5  # Minimum distance between any two points
+        # max_attempts = 10000  # Maximum attempts to find a valid point
+        # fixed_z = 1  # Fixed z-coordinate
 
-        coords = []  # List to store the coordinates
-        attempts = 0
+        # coords = []  # List to store the coordinates
+        # attempts = 0
 
-        while len(coords) < self.NUM_CYLINDERS and attempts < max_attempts:
-        # while len(coords) < self.NUM_CYLINDERS:
-            # Generate a random x and y coordinate
-            x, y = random.uniform(min_x, max_x), random.uniform(min_y, max_y)
+        # while len(coords) < self.NUM_CYLINDERS and attempts < max_attempts:
+        # # while len(coords) < self.NUM_CYLINDERS:
+        #     # Generate a random x and y coordinate
+        #     x, y = random.uniform(min_x, max_x), random.uniform(min_y, max_y)
 
-            # Check if the new coordinate is at least min_distance away from all others
-            if all(np.hypot(x - cx, y - cy) >= min_distance for cx, cy, _ in coords):
-                coords.append((x, y, fixed_z))  # Add the valid coordinate to the list, with z fixed at 1
+        #     # Check if the new coordinate is at least min_distance away from all others
+        #     if all(np.hypot(x - cx, y - cy) >= min_distance for cx, cy, _ in coords):
+        #         coords.append((x, y, fixed_z))  # Add the valid coordinate to the list, with z fixed at 1
 
-            attempts += 1  # Increment the attempt counter
+        #     attempts += 1  # Increment the attempt counter
 
-        # Assuming 'coords' and other necessary variables like 'self.CLIENT' are already defined
-        self.cylinder_pos = coords[:self.NUM_CYLINDERS]  # Selecting the first five coordinates
-        self.cylinder = pkg_resources.resource_filename('gym_pybullet_drones', 'assets/cylinder.urdf')
-        self.target_IDs = []
+        # # Assuming 'coords' and other necessary variables like 'self.CLIENT' are already defined
+        # self.cylinder_pos = coords[:self.NUM_CYLINDERS]  # Selecting the first five coordinates
+        # self.cylinder = pkg_resources.resource_filename('gym_pybullet_drones', 'assets/cylinder.urdf')
+        # self.target_IDs = []
 
-        for pos in self.cylinder_pos:
-            target_ID = p.loadURDF(self.cylinder,
-                                pos,
-                                p.getQuaternionFromEuler([0, 0, 0]),
-                                physicsClientId=self.CLIENT
-                                )
-            self.target_IDs.append(target_ID)
-            p.setCollisionFilterGroupMask(target_ID, -1, group2, 1, physicsClientId=self.CLIENT)
+        # for pos in self.cylinder_pos:
+        #     target_ID = p.loadURDF(self.cylinder,
+        #                         pos,
+        #                         p.getQuaternionFromEuler([0, 0, 0]),
+        #                         physicsClientId=self.CLIENT
+        #                         )
+        #     self.target_IDs.append(target_ID)
+        #     p.setCollisionFilterGroupMask(target_ID, -1, group2, 0, physicsClientId=self.CLIENT)
 
         ###########################################################
 
@@ -444,9 +449,6 @@ class BaseAviary(gym.Env):
         
         lidar_rays = np.array([lidar_rays[i][2] for i in range(self.NUM_LIDAR_RAYS)])
         lidar_rays = np.array([lidar_rays[i] if lidar_rays[i] != -1 else 1 for i in range(self.NUM_LIDAR_RAYS)])
-        # print("lidar_rays : ", lidar_rays)
-
-        
         return lidar_rays
 
 
@@ -650,7 +652,6 @@ class BaseAviary(gym.Env):
         # return obs, reward, terminated, truncated, info
         # print("terminated: ", terminated)
         # print("truncated: ", truncated)
-        # print("info: ", info)
         return obs, reward, terminated, truncated, info
 
     ################################################################################

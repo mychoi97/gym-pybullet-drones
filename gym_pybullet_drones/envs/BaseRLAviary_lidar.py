@@ -1,9 +1,6 @@
 import os
 import numpy as np
 import pybullet as p
-import math
-import matplotlib.pyplot as plt
-
 from gymnasium import spaces
 from collections import deque
 
@@ -30,7 +27,6 @@ class BaseRLAviary(BaseAviary):
                  obs: ObservationType = ObservationType.KIN_TARGET,
                  act: ActionType = ActionType.TWO_D_VEL,
                  num_obs: int = 4,
-                 env_level: int = 1,
                  num_cylinders: int = 0
                  ):
         """Initialization of a generic single and multi-agent RL environment.
@@ -76,7 +72,7 @@ class BaseRLAviary(BaseAviary):
         self.OBS_TYPE = obs
         self.ACT_TYPE = act
         self.NUM_OBS = num_obs
-        # self.NUM_CYLINDERS = num_cylinders
+        self.NUM_CYLINDERS = num_cylinders
         self.communication_range = 5
 
         #### Create integrated controllers #########################
@@ -100,7 +96,6 @@ class BaseRLAviary(BaseAviary):
                          user_debug_gui=False,  # Remove of RPM sliders from all single agent learning aviaries
                          vision_attributes=vision_attributes,
                          num_obs=num_obs,
-                         env_level=env_level,
                          num_cylinders=num_cylinders
                          )
         #### Set a limit on the maximum target speed ###############
@@ -110,9 +105,6 @@ class BaseRLAviary(BaseAviary):
             # self.SPEED_LIMIT = 0.03 * self.MAX_SPEED_KMH * (1000/3600)
             # self.SPEED_LIMIT = np.array([0.06 * self.MAX_SPEED_KMH * (1000/3600), 0.06 * self.MAX_SPEED_KMH * (1000/3600)])
             self.SPEED_LIMIT = 1.0
-
-        plt.ion()
-        fig, self.ax = plt.subplots(subplot_kw={'projection': 'polar'})
 
     ################################################################################
 
@@ -335,8 +327,8 @@ class BaseRLAviary(BaseAviary):
             #### Observation vector ### 타겟과의 상대적인 위치, 속도, 가장 가까운 드론들의 상대적인 위치, 속도, 장애물과의 상대적인 위치
             lo = -np.inf
             hi = np.inf
-            obs_lower_bound = np.array([np.repeat(np.array([lo]), 6 + self.NUM_OBS * 6 + 48) for i in range(self.NUM_DRONES)])
-            obs_upper_bound = np.array([np.repeat(np.array([hi]), 6 + self.NUM_OBS * 6 + 48) for i in range(self.NUM_DRONES)])
+            obs_lower_bound = np.array([np.repeat(np.array([lo]), 6 + self.NUM_OBS * 6 + 36) for i in range(self.NUM_DRONES)])
+            obs_upper_bound = np.array([np.repeat(np.array([hi]), 6 + self.NUM_OBS * 6 + 36) for i in range(self.NUM_DRONES)])
             #### Add action buffer to observation space ################
             act_lo = -1
             act_hi = +1
@@ -369,82 +361,6 @@ class BaseRLAviary(BaseAviary):
             A Box() of shape (NUM_DRONES,H,W,4) or (NUM_DRONES,12) depending on the observation type.
 
         """
-
-        #################################LiDAR test###################################
-
-        # drone = self._getDroneStateVector(0)
-        # # print("drone state vector: ", drone)
-
-        # drone_position = drone[0:3]
-        # roll, pitch, yaw = drone[7:10]
-
-        # lidar_range = 10
-        # lidar_angles = [0, 360]
-
-        # R_roll = np.array([
-        #     [1, 0, 0],
-        #     [0, math.cos(roll), -math.sin(roll)],
-        #     [0, math.sin(roll), math.cos(roll)]
-        # ])
-
-        # R_pitch = np.array([
-        #     [math.cos(pitch), 0, math.sin(pitch)],
-        #     [0, 1, 0],
-        #     [-math.sin(pitch), 0, math.cos(pitch)]
-        # ])
-
-        # R_yaw = np.array([
-        #     [math.cos(yaw), -math.sin(yaw), 0],
-        #     [math.sin(yaw), math.cos(yaw), 0],
-        #     [0, 0, 1]
-        # ])
-
-        # R_rpy = R_yaw @ R_pitch @ R_roll
-
-        # results = []
-
-        # for angle in range(lidar_angles[0], lidar_angles[1] + 1):
-        #     # 라이다 레이의 끝점 계산 (yaw만 고려하는 경우)
-        #     end_point_rel = [
-        #         lidar_range * math.sin(math.radians(angle)),
-        #         lidar_range * math.cos(math.radians(angle)),
-        #         0
-        #     ]
-
-        #     # RPY 각도를 모두 고려하여 레이의 끝점 계산
-        #     end_point_rel_rot = R_rpy @ end_point_rel
-        #     end_point = drone_position + end_point_rel_rot
-
-        #     # 레이 발사
-        #     hit = p.rayTest(drone_position, end_point.tolist())
-        #     if hit[0][2] != -1:  # 레이가 무언가에 충돌한 경우
-        #         distance = hit[0][2] * lidar_range
-        #         results.append((angle, distance))
-        #     else:
-        #         results.append((angle, lidar_range))
-
-        # LiDAR = self._getDroneLiDAR(0) * self.LIDAR_RANGE
-
-        # print("LiDAR",LiDAR)
-        
-
-        # angles = [math.radians(ang*10) for ang in range(36)]
-
-        # # distances = [result[1] for result in LiDAR]
-
-        # # # 극 좌표계를 사용하여 시각화
-        # self.ax.clear()
-        # self.ax.set_theta_offset(np.pi/2.0) # 시작 각도를 90도로 설정 (위 방향)
-        # self.ax.plot(angles, LiDAR)
-        # self.ax.set_title("Lidar Scan")
-        # self.ax.set_rlabel_position(-22.5)
-        # self.ax.grid(True)
-
-        # plt.pause(0.0001)
-
-
-        ####################################################################
-
         if self.OBS_TYPE == ObservationType.RGB:
             if self.step_counter%self.IMG_CAPTURE_FREQ == 0:
                 for i in range(self.NUM_DRONES):
@@ -478,12 +394,11 @@ class BaseRLAviary(BaseAviary):
         #### OBS OF SIZE ??
         #### Observation vector ### 타겟과의 상대적인 위치, 속도, 가장 가까운 드론들의 상대적인 위치, 속도, 장애물과의 상대적인 위치
         elif self.OBS_TYPE == ObservationType.KIN_TARGET:
-            # MAX_COM = self.communication_range
-            MAX_COM = 10
-            MAX_POS = 10
+            MAX_COM = self.communication_range
+            MAX_POS = 20
             target_position = self.TARGET_POS
 
-            obs_len = 6 + self.NUM_OBS*6 + 48
+            obs_len = 6 + self.NUM_OBS*6 + 36
             obs_r = np.zeros((self.NUM_DRONES, obs_len))
             for i in range(self.NUM_DRONES):
                 lidar = self._getDroneLiDAR(i)
@@ -502,8 +417,7 @@ class BaseRLAviary(BaseAviary):
                         other_vel = other_obs[10:13]
 
                         other_relative_pos = other_pos - pos
-                        # other_relative_vel = (other_vel - vel) / 2
-                        other_relative_vel = other_vel - vel
+                        other_relative_vel = (other_vel - vel) / 2
 
                         distance = np.linalg.norm(other_relative_pos)
 
@@ -527,13 +441,8 @@ class BaseRLAviary(BaseAviary):
                     closest_drones_info.append(np.zeros(6))
 
                 closest_drones_info_flat = [drone_info.flatten().tolist() for drone_info in closest_drones_info]
-                # print("target_position - pos: ", target_position - pos)
-                # print("normalized target_position - pos: ", (target_position - pos)/MAX_POS)
-                # print("vel: ", vel)
-                # print("closest_drones_info_flat: ", closest_drones_info_flat)
-                closest_drones_info_flat = [item/MAX_COM for sublist in closest_drones_info_flat for item in sublist]
-                # print("normalized_closest_drones_info_flat: ", closest_drones_info_flat)
-                # print("lidar: ", lidar)
+                closest_drones_info_flat = [item/MAX_COM for sublist in closest_drones_info_flat for item in sublist] 
+
 
                 # Flatten the list of states and stack them 
                 obs_r[i, :] = np.clip(np.hstack([(target_position - pos)/MAX_POS, vel, closest_drones_info_flat, lidar]).reshape(obs_len,), -1, 1)

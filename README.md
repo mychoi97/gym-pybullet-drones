@@ -49,15 +49,6 @@ python learn.py --multiagent true # task: 2-drone hover at z == 1.2 and 0.7
 
 <img src="gym_pybullet_drones/assets/rl.gif" alt="rl example" width="375"> <img src="gym_pybullet_drones/assets/marl.gif" alt="marl example" width="375">
 
-### utiasDSL `pycffirmware` Python Bindings example (multiplatform, single-drone)
-
-Install [`pycffirmware`](https://github.com/utiasDSL/pycffirmware?tab=readme-ov-file#installation) for Ubuntu, macOS, or Windows
-
-```sh
-cd gym_pybullet_drones/examples/
-python3 cff-dsl.py
-```
-
 ### Betaflight SITL example (Ubuntu only)
 
 ```sh
@@ -109,7 +100,6 @@ If you wish, please cite our [IROS 2021 paper](https://arxiv.org/abs/2103.02142)
 ## Core Team WIP
 
 - [ ] Multi-drone `crazyflie-firmware` SITL support (@spencerteetaert, @JacopoPan)
-- [ ] Use SITL services with steppable simulation (@JacopoPan)
 
 ## Desired Contributions/PRs
 

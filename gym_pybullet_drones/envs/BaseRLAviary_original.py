@@ -1,9 +1,6 @@
 import os
 import numpy as np
 import pybullet as p
-import math
-import matplotlib.pyplot as plt
-
 from gymnasium import spaces
 from collections import deque
 
@@ -27,11 +24,8 @@ class BaseRLAviary(BaseAviary):
                  ctrl_freq: int = 240,
                  gui=False,
                  record=False,
-                 obs: ObservationType = ObservationType.KIN_TARGET,
-                 act: ActionType = ActionType.TWO_D_VEL,
-                 num_obs: int = 4,
-                 env_level: int = 1,
-                 num_cylinders: int = 0
+                 obs: ObservationType=ObservationType.KIN,
+                 act: ActionType=ActionType.RPM
                  ):
         """Initialization of a generic single and multi-agent RL environment.
 
@@ -75,12 +69,8 @@ class BaseRLAviary(BaseAviary):
         vision_attributes = True if obs == ObservationType.RGB else False
         self.OBS_TYPE = obs
         self.ACT_TYPE = act
-        self.NUM_OBS = num_obs
-        # self.NUM_CYLINDERS = num_cylinders
-        self.communication_range = 5
-
         #### Create integrated controllers #########################
-        if act in [ActionType.PID, ActionType.VEL, ActionType.ONE_D_PID, ActionType.TWO_D_VEL]:
+        if act in [ActionType.PID, ActionType.VEL, ActionType.ONE_D_PID]:
             os.environ['KMP_DUPLICATE_LIB_OK']='True'
             if drone_model in [DroneModel.CF2X, DroneModel.CF2P]:
                 self.ctrl = [DSLPIDControl(drone_model=DroneModel.CF2X) for i in range(num_drones)]
@@ -99,20 +89,10 @@ class BaseRLAviary(BaseAviary):
                          obstacles=True,  # Add obstacles for RGB observations and/or FlyThruGate
                          user_debug_gui=False,  # Remove of RPM sliders from all single agent learning aviaries
                          vision_attributes=vision_attributes,
-                         num_obs=num_obs,
-                         env_level=env_level,
-                         num_cylinders=num_cylinders
                          )
         #### Set a limit on the maximum target speed ###############
         if act == ActionType.VEL:
-            self.SPEED_LIMIT = 0.03 * self.MAX_SPEED_KMH * (1000 / 3600)  # 0.25m/s
-        elif act == ActionType.TWO_D_VEL:
-            # self.SPEED_LIMIT = 0.03 * self.MAX_SPEED_KMH * (1000/3600)
-            # self.SPEED_LIMIT = np.array([0.06 * self.MAX_SPEED_KMH * (1000/3600), 0.06 * self.MAX_SPEED_KMH * (1000/3600)])
-            self.SPEED_LIMIT = 1.0
-
-        plt.ion()
-        fig, self.ax = plt.subplots(subplot_kw={'projection': 'polar'})
+            self.SPEED_LIMIT = 0.03 * self.MAX_SPEED_KMH * (1000 / 3600)
 
     ################################################################################
 
@@ -164,8 +144,6 @@ class BaseRLAviary(BaseAviary):
             size = 3
         elif self.ACT_TYPE in [ActionType.ONE_D_RPM, ActionType.ONE_D_PID]:
             size = 1
-        elif self.ACT_TYPE == ActionType.TWO_D_VEL:
-            size = 2
         else:
             print("[ERROR] in BaseRLAviary._actionSpace()")
             exit()
@@ -243,33 +221,6 @@ class BaseRLAviary(BaseAviary):
                                                         target_vel=self.SPEED_LIMIT * np.abs(target[3]) * v_unit_vector # target the desired velocity vector
                                                         )
                 rpm[k,:] = temp
-
-            elif self.ACT_TYPE == ActionType.TWO_D_VEL:
-                state = self._getDroneStateVector(k)
-                if np.linalg.norm(target[0:2]) != 0:
-                    v_unit_vector = target[0:2] / np.linalg.norm(target[0:2])
-                else:
-                    v_unit_vector = np.zeros(2)
-
-                # target_vel = 0.5 * (self.SPEED_LIMIT * target[0:2]) + 0.5 * state[10:12]
-                # target_vel = 0.15 * (self.SPEED_LIMIT * target[0:2]) + 0.85 * state[10:12]
-                # target_vel = 0.3 * (self.SPEED_LIMIT * target[0:2]) + 0.7 * state[10:12]
-                target_vel = 0.1 * (self.SPEED_LIMIT * target[0:2]) + 0.9 * state[10:12]
-                target_vel = np.append(target_vel, 0) # z 방향 속도를 0으로 추가
-                # target_vel = self.SPEED_LIMIT * target[0:2]
-                temp, _, _ = self.ctrl[k].computeControl(control_timestep=self.CTRL_TIMESTEP,
-                                                              cur_pos=state[0:3],
-                                                              cur_quat=state[3:7],
-                                                              cur_vel=state[10:13],
-                                                              cur_ang_vel=state[13:16],
-                                                              target_pos=np.array([state[0], state[1], 1]),
-                                                              # same as the current position
-                                                              target_rpy=np.array([0, 0, 0]),  # keep current pose
-                                                              target_vel=np.array([target_vel[0], target_vel[1], target_vel[2]])
-                                                              # z 방향 속도가 0이 되도록
-                                                              )
-                rpm[k, :] = temp
-
             elif self.ACT_TYPE == ActionType.ONE_D_RPM:
                 rpm[k,:] = np.repeat(self.HOVER_RPM * (1+0.05*target), 4)
             elif self.ACT_TYPE == ActionType.ONE_D_PID:
@@ -323,38 +274,8 @@ class BaseRLAviary(BaseAviary):
                 elif self.ACT_TYPE in [ActionType.ONE_D_RPM, ActionType.ONE_D_PID]:
                     obs_lower_bound = np.hstack([obs_lower_bound, np.array([[act_lo] for i in range(self.NUM_DRONES)])])
                     obs_upper_bound = np.hstack([obs_upper_bound, np.array([[act_hi] for i in range(self.NUM_DRONES)])])
-                elif self.ACT_TYPE == ActionType.TWO_D_VEL:
-                    obs_lower_bound = np.hstack([obs_lower_bound, np.array([[act_lo,act_lo] for i in range(self.NUM_DRONES)])])
-                    obs_upper_bound = np.hstack([obs_upper_bound, np.array([[act_hi,act_hi] for i in range(self.NUM_DRONES)])])
             return spaces.Box(low=obs_lower_bound, high=obs_upper_bound, dtype=np.float32)
             ############################################################
-
-        elif self.OBS_TYPE == ObservationType.KIN_TARGET:
-            ############################################################
-            #### OBS OF SIZE ??
-            #### Observation vector ### 타겟과의 상대적인 위치, 속도, 가장 가까운 드론들의 상대적인 위치, 속도, 장애물과의 상대적인 위치
-            lo = -np.inf
-            hi = np.inf
-            obs_lower_bound = np.array([np.repeat(np.array([lo]), 6 + self.NUM_OBS * 6 + 48) for i in range(self.NUM_DRONES)])
-            obs_upper_bound = np.array([np.repeat(np.array([hi]), 6 + self.NUM_OBS * 6 + 48) for i in range(self.NUM_DRONES)])
-            #### Add action buffer to observation space ################
-            act_lo = -1
-            act_hi = +1
-            for i in range(self.ACTION_BUFFER_SIZE):
-                if self.ACT_TYPE in [ActionType.RPM, ActionType.VEL]:
-                    obs_lower_bound = np.hstack([obs_lower_bound, np.array([[act_lo,act_lo,act_lo,act_lo] for i in range(self.NUM_DRONES)])])
-                    obs_upper_bound = np.hstack([obs_upper_bound, np.array([[act_hi,act_hi,act_hi,act_hi] for i in range(self.NUM_DRONES)])])
-                elif self.ACT_TYPE==ActionType.PID:
-                    obs_lower_bound = np.hstack([obs_lower_bound, np.array([[act_lo,act_lo,act_lo] for i in range(self.NUM_DRONES)])])
-                    obs_upper_bound = np.hstack([obs_upper_bound, np.array([[act_hi,act_hi,act_hi] for i in range(self.NUM_DRONES)])])
-                elif self.ACT_TYPE in [ActionType.ONE_D_RPM, ActionType.ONE_D_PID]:
-                    obs_lower_bound = np.hstack([obs_lower_bound, np.array([[act_lo] for i in range(self.NUM_DRONES)])])
-                    obs_upper_bound = np.hstack([obs_upper_bound, np.array([[act_hi] for i in range(self.NUM_DRONES)])])
-                elif self.ACT_TYPE == ActionType.TWO_D_VEL:
-                    obs_lower_bound = np.hstack([obs_lower_bound, np.array([[act_lo,act_lo] for i in range(self.NUM_DRONES)])])
-                    obs_upper_bound = np.hstack([obs_upper_bound, np.array([[act_hi,act_hi] for i in range(self.NUM_DRONES)])])
-            return spaces.Box(low=obs_lower_bound, high=obs_upper_bound, dtype=np.float32)
-
         else:
             print("[ERROR] in BaseRLAviary._observationSpace()")
     
@@ -369,82 +290,6 @@ class BaseRLAviary(BaseAviary):
             A Box() of shape (NUM_DRONES,H,W,4) or (NUM_DRONES,12) depending on the observation type.
 
         """
-
-        #################################LiDAR test###################################
-
-        # drone = self._getDroneStateVector(0)
-        # # print("drone state vector: ", drone)
-
-        # drone_position = drone[0:3]
-        # roll, pitch, yaw = drone[7:10]
-
-        # lidar_range = 10
-        # lidar_angles = [0, 360]
-
-        # R_roll = np.array([
-        #     [1, 0, 0],
-        #     [0, math.cos(roll), -math.sin(roll)],
-        #     [0, math.sin(roll), math.cos(roll)]
-        # ])
-
-        # R_pitch = np.array([
-        #     [math.cos(pitch), 0, math.sin(pitch)],
-        #     [0, 1, 0],
-        #     [-math.sin(pitch), 0, math.cos(pitch)]
-        # ])
-
-        # R_yaw = np.array([
-        #     [math.cos(yaw), -math.sin(yaw), 0],
-        #     [math.sin(yaw), math.cos(yaw), 0],
-        #     [0, 0, 1]
-        # ])
-
-        # R_rpy = R_yaw @ R_pitch @ R_roll
-
-        # results = []
-
-        # for angle in range(lidar_angles[0], lidar_angles[1] + 1):
-        #     # 라이다 레이의 끝점 계산 (yaw만 고려하는 경우)
-        #     end_point_rel = [
-        #         lidar_range * math.sin(math.radians(angle)),
-        #         lidar_range * math.cos(math.radians(angle)),
-        #         0
-        #     ]
-
-        #     # RPY 각도를 모두 고려하여 레이의 끝점 계산
-        #     end_point_rel_rot = R_rpy @ end_point_rel
-        #     end_point = drone_position + end_point_rel_rot
-
-        #     # 레이 발사
-        #     hit = p.rayTest(drone_position, end_point.tolist())
-        #     if hit[0][2] != -1:  # 레이가 무언가에 충돌한 경우
-        #         distance = hit[0][2] * lidar_range
-        #         results.append((angle, distance))
-        #     else:
-        #         results.append((angle, lidar_range))
-
-        # LiDAR = self._getDroneLiDAR(0) * self.LIDAR_RANGE
-
-        # print("LiDAR",LiDAR)
-        
-
-        # angles = [math.radians(ang*10) for ang in range(36)]
-
-        # # distances = [result[1] for result in LiDAR]
-
-        # # # 극 좌표계를 사용하여 시각화
-        # self.ax.clear()
-        # self.ax.set_theta_offset(np.pi/2.0) # 시작 각도를 90도로 설정 (위 방향)
-        # self.ax.plot(angles, LiDAR)
-        # self.ax.set_title("Lidar Scan")
-        # self.ax.set_rlabel_position(-22.5)
-        # self.ax.grid(True)
-
-        # plt.pause(0.0001)
-
-
-        ####################################################################
-
         if self.OBS_TYPE == ObservationType.RGB:
             if self.step_counter%self.IMG_CAPTURE_FREQ == 0:
                 for i in range(self.NUM_DRONES):
@@ -464,8 +309,8 @@ class BaseRLAviary(BaseAviary):
             #### OBS SPACE OF SIZE 12
             obs_12 = np.zeros((self.NUM_DRONES,12))
             for i in range(self.NUM_DRONES):
-                obs = self._clipAndNormalizeState(self._getDroneStateVector(i))
-                # obs = self._getDroneStateVector(i)
+                #obs = self._clipAndNormalizeState(self._getDroneStateVector(i))
+                obs = self._getDroneStateVector(i)
                 obs_12[i, :] = np.hstack([obs[0:3], obs[7:10], obs[10:13], obs[13:16]]).reshape(12,)
             ret = np.array([obs_12[i, :] for i in range(self.NUM_DRONES)]).astype('float32')
             #### Add action buffer to observation #######################
@@ -473,93 +318,5 @@ class BaseRLAviary(BaseAviary):
                 ret = np.hstack([ret, np.array([self.action_buffer[i][j, :] for j in range(self.NUM_DRONES)])])
             return ret
             ############################################################
-
-        ################################### 추가된 부분 ######################################################################################################################
-        #### OBS OF SIZE ??
-        #### Observation vector ### 타겟과의 상대적인 위치, 속도, 가장 가까운 드론들의 상대적인 위치, 속도, 장애물과의 상대적인 위치
-        elif self.OBS_TYPE == ObservationType.KIN_TARGET:
-            # MAX_COM = self.communication_range
-            MAX_COM = 10
-            MAX_POS = 10
-            target_position = self.TARGET_POS
-
-            obs_len = 6 + self.NUM_OBS*6 + 48
-            obs_r = np.zeros((self.NUM_DRONES, obs_len))
-            for i in range(self.NUM_DRONES):
-                lidar = self._getDroneLiDAR(i)
-                obs = self._clipAndNormalizeState(self._getDroneStateVector(i))
-                # obs = self._getDroneStateVector(i)
-                pos = obs[0:3]
-                vel = obs[10:13]
-
-                # Initialize a list to store the distances and states of other drones
-                other_distances = []
-                for j in range(self.NUM_DRONES):
-                    if i != j:
-                        other_obs = self._clipAndNormalizeState(self._getDroneStateVector(j))
-                        # other_obs = self._getDroneStateVector(j)
-                        other_pos = other_obs[0:3]
-                        other_vel = other_obs[10:13]
-
-                        other_relative_pos = other_pos - pos
-                        # other_relative_vel = (other_vel - vel) / 2
-                        other_relative_vel = other_vel - vel
-
-                        distance = np.linalg.norm(other_relative_pos)
-
-                        # Only retain position and velocity information from other drone state
-                        # other_drone_info = np.concatenate((other_relative_pos, other_relative_vel))
-                        # other_distances.append((distance, other_drone_info))
-
-                        # Consider only in communication range
-                        if distance <= MAX_COM:
-                            other_drone_info = np.concatenate((other_relative_pos, other_relative_vel))
-                            other_distances.append((distance, other_drone_info))
-
-                # Sort the list by distance
-                other_distances.sort(key=lambda x: x[0])
-
-                # Get the position and velocity of the 6 closest drones
-                closest_drones_info = [drone[1] for drone in other_distances[:self.NUM_OBS]]
-
-                # Pad the list with zeros if there are less than self.NUM_OBS
-                while len(closest_drones_info) < self.NUM_OBS:
-                    closest_drones_info.append(np.zeros(6))
-
-                closest_drones_info_flat = [drone_info.flatten().tolist() for drone_info in closest_drones_info]
-                # print("target_position - pos: ", target_position - pos)
-                # print("normalized target_position - pos: ", (target_position - pos)/MAX_POS)
-                # print("vel: ", vel)
-                # print("closest_drones_info_flat: ", closest_drones_info_flat)
-                closest_drones_info_flat = [item/MAX_COM for sublist in closest_drones_info_flat for item in sublist]
-                # print("normalized_closest_drones_info_flat: ", closest_drones_info_flat)
-                # print("lidar: ", lidar)
-
-                # Flatten the list of states and stack them 
-                obs_r[i, :] = np.clip(np.hstack([(target_position - pos)/MAX_POS, vel, closest_drones_info_flat, lidar]).reshape(obs_len,), -1, 1)
-
-            ret = np.array([obs_r[i, :] for i in range(self.NUM_DRONES)]).astype('float32')
-            #### Add action buffer to observation #######################
-            for i in range(self.ACTION_BUFFER_SIZE):
-                ret = np.hstack([ret, np.array([self.action_buffer[i][j, :] for j in range(self.NUM_DRONES)])])
-            return ret
-
         else:
             print("[ERROR] in BaseRLAviary._computeObs()")
-
-    ################################################################################
-
-    def _clipAndNormalizeState(self,
-                               state
-                               ):
-        """Normalizes a drone's state to the [-1,1] range.
-
-        Must be implemented in a subclass.
-
-        Parameters
-        ----------
-        state : ndarray
-            Array containing the non-normalized state of a single drone.
-
-        """
-        raise NotImplementedError

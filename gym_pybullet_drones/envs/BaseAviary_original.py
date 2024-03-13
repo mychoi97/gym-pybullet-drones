@@ -12,12 +12,7 @@ import numpy as np
 import pybullet as p
 import pybullet_data
 import gymnasium as gym
-import cv2
 from gym_pybullet_drones.utils.enums import DroneModel, Physics, ImageType
-import csv
-import random
-from gym_pybullet_drones.control.DSLPIDControl import DSLPIDControl
-
 
 
 class BaseAviary(gym.Env):
@@ -41,10 +36,7 @@ class BaseAviary(gym.Env):
                  obstacles=False,
                  user_debug_gui=True,
                  vision_attributes=False,
-                 output_folder='results',
-                 num_obs: int = 4,
-                 env_level: int = 1,
-                 num_cylinders: int = 0,
+                 output_folder='results'
                  ):
         """Initialization of a generic aviary environment.
 
@@ -222,238 +214,9 @@ class BaseAviary(gym.Env):
         self._updateAndStoreKinematicInformation()
         #### Start video recording #################################
         self._startVideoRecording()
-
-        ############################################ 바꾼 부분 ###################################################################################################################
-        self.ENV_LEVEL = env_level
-
-        self.NUM_OBS = num_obs
-        self.NUM_CYLINDERS = num_cylinders
-
-        self.NUM_LIDAR_RAYS = 48
-        self.LIDAR_RANGE = 10
-
-        self.init_seed()
-
-        self.RESULTS = {}
-        self.RESULTS['num_pass_gap'] = []
-        self.RESULTS['average_distance_to_flock_center'] = []
-        self.NUM_EPISODES = 0
-
-        self.prev_pos = np.zeros((1, self.NUM_DRONES, 3))
-
-        self.frame_counter = 1
-        self.visualization_color = np.array([[255, 0, 0],
-                                             [255, 128, 0],
-                                             [255, 255, 0],
-                                             [0, 255, 0],
-                                             [0, 255, 255],
-                                             [0, 0, 255],
-                                             [128, 0, 255],
-                                             [255, 0, 128],
-                                             [139, 69, 19],
-                                             [128, 128, 128]]) / 255
-
-        self.communication_range = 5
-        ################################################################################
-
-    ############################################ 추가된 부분 ###################################################################################################################
-    def init_seed(self):
-        # random.seed(self.ENV_LEVEL)
-        # np.random.seed(self.ENV_LEVEL)
-        random.seed(0)
-        np.random.seed(0)
-
-    def _visualize_paths(self):
-        obs = np.array([self._getDroneStateVector(i) for i in range(self.NUM_DRONES)])
-        pos = np.zeros((1, self.NUM_DRONES, 3))
-        # if self.frame_counter == 1:
-        #     self.prev_pos[0,i,:] = obs[i][0:3]
-        #     self.frame_counter += 1
-        #     return
-        # elif self.frame_counter % 20 == 0:
-        for i in range(self.NUM_DRONES):
-            pos[0, i, :] = obs[i][0:3]
-            # self.drone_paths[i].append(pos[0,i,:].tolist())
-            # path = self.drone_paths[i]
-            # for j in range(len(path) - 1):
-            #     p.addUserDebugLine(lineFromXYZ=path[j], lineToXYZ=path[j+1], lineColorRGB=[1,0,0], lineWidth=2, lifeTime=0)
-            if self.frame_counter % 10 == 0:
-                p.addUserDebugLine(lineFromXYZ=self.prev_pos[0, i, :], lineToXYZ=pos[0, i, :].tolist(),
-                                   lineColorRGB=self.visualization_color[i], lineWidth=3.0, lifeTime=0)
-                self.prev_pos[0, i, :] = pos[0, i, :]
-        self.frame_counter += 1
-
-    # def more_drone(self):
-    #     self.NUM_DRONES += 1
-    #     self.ctrl = [DSLPIDControl(drone_model=DroneModel.CF2X) for i in range(self.NUM_DRONES)]
-    #     self.reset()
-
-        ################################################ 추가된 부분 ##################################################################################################################################################################
-    def _get_randomized_target(self):
-        random_x = np.clip(round(random.gauss(self.ENV_LEVEL*0.5, 0.2), 1), 0.1, 5)
-        random_y = random.uniform(-0.2 * self.ENV_LEVEL, 0.2 * self.ENV_LEVEL)
-        self.GAP_RADIUS = np.clip(round(random.gauss(2.0 - (1.0/9)*(self.ENV_LEVEL - 1), 0.1), 1), 1.0, 2.0)
-
-        ############# For test ################
-        # random_x = 6.0
-        # random_y = 0.0
-        self.GAP_RADIUS = 1.0
-
-        self.TARGET_POS = [random_x+2, random_y,  1]
-        self.WALL_POS = [random_x, random_y, 1]
-
-        print("@@@@@@@@@@@@@", "random x: ", random_x, " random y: ", random_y, " gap: ", self.GAP_RADIUS * 2,
-              "@@@@@@@@@@@@@")
-
-        self.urdf_pos1 = [self.WALL_POS[0] + 0.1, self.WALL_POS[1] - (2.5 + self.GAP_RADIUS), 1.0]
-        self.urdf_pos2 = [self.WALL_POS[0] + 0.1, self.WALL_POS[1] + (2.5 + self.GAP_RADIUS), 1.0]
-        self.urdf_pos3 = [4, 4+0.1, 1.0]
-        self.urdf_pos4 = [4, -4-0.1, 1.0]
-        self.urdf_pos5 = [-2-0.1, 0, 1.0]
-
-        self.urdf_ori = [0, -1.57, 0]
-
-        group1 = self.NUM_DRONES + 1
-        group2 = self.NUM_DRONES + 2
-
-        self.urdf_gap = pkg_resources.resource_filename('gym_pybullet_drones', 'assets/gap.urdf')
-        self.urdf_left = pkg_resources.resource_filename('gym_pybullet_drones', 'assets/left_wall.urdf')
-        self.urdf_right = pkg_resources.resource_filename('gym_pybullet_drones', 'assets/right_wall.urdf')
-        self.urdf_back = pkg_resources.resource_filename('gym_pybullet_drones', 'assets/back_wall.urdf')
-
-        self.target_ID1 = p.loadURDF(self.urdf_gap,
-                       self.urdf_pos1,
-                       p.getQuaternionFromEuler(self.urdf_ori),
-                       physicsClientId=self.CLIENT
-                       )
-        self.target_ID2 = p.loadURDF(self.urdf_gap,
-                       self.urdf_pos2,
-                       p.getQuaternionFromEuler(self.urdf_ori),
-                       physicsClientId=self.CLIENT
-                       )
-        self.target_ID3 = p.loadURDF(self.urdf_left,
-                          self.urdf_pos3,
-                          p.getQuaternionFromEuler([1.57, -1.57, 0]),
-                          physicsClientId=self.CLIENT
-                          )
-        self.target_ID4 = p.loadURDF(self.urdf_right,
-                            self.urdf_pos4,
-                            p.getQuaternionFromEuler([1.57, -1.57, 0]),
-                            physicsClientId=self.CLIENT
-                            )
-        self.target_ID5 = p.loadURDF(self.urdf_back,
-                            self.urdf_pos5,
-                            p.getQuaternionFromEuler(self.urdf_ori),
-                            physicsClientId=self.CLIENT
-                            )
-
-        # for i in range(self.NUM_DRONES):
-        #     p.setCollisionFilterGroupMask(self.DRONE_IDS[i], -1, i, group2, physicsClientId=self.CLIENT)
-
-        p.setCollisionFilterGroupMask(self.target_ID1, -1, group2, 1, physicsClientId=self.CLIENT)
-        p.setCollisionFilterGroupMask(self.target_ID2, -1, group2, 1, physicsClientId=self.CLIENT)
-        p.setCollisionFilterGroupMask(self.target_ID3, -1, group2, 1, physicsClientId=self.CLIENT)
-        p.setCollisionFilterGroupMask(self.target_ID4, -1, group2, 1, physicsClientId=self.CLIENT)
-        p.setCollisionFilterGroupMask(self.target_ID5, -1, group2, 1, physicsClientId=self.CLIENT)
-
-        ######################## 실린더 좌표 #########################
-        # Parameters
-        min_x, max_x = 2, (self.ENV_LEVEL*0.5 - 2)
-        min_y, max_y = -4, 4
-        # n = 10  # Number of coordinates to generate
-        min_distance = 1.5  # Minimum distance between any two points
-        max_attempts = 10000  # Maximum attempts to find a valid point
-        fixed_z = 1  # Fixed z-coordinate
-
-        coords = []  # List to store the coordinates
-        attempts = 0
-
-        while len(coords) < self.NUM_CYLINDERS and attempts < max_attempts:
-        # while len(coords) < self.NUM_CYLINDERS:
-            # Generate a random x and y coordinate
-            x, y = random.uniform(min_x, max_x), random.uniform(min_y, max_y)
-
-            # Check if the new coordinate is at least min_distance away from all others
-            if all(np.hypot(x - cx, y - cy) >= min_distance for cx, cy, _ in coords):
-                coords.append((x, y, fixed_z))  # Add the valid coordinate to the list, with z fixed at 1
-
-            attempts += 1  # Increment the attempt counter
-
-        # Assuming 'coords' and other necessary variables like 'self.CLIENT' are already defined
-        self.cylinder_pos = coords[:self.NUM_CYLINDERS]  # Selecting the first five coordinates
-        self.cylinder = pkg_resources.resource_filename('gym_pybullet_drones', 'assets/cylinder.urdf')
-        self.target_IDs = []
-
-        for pos in self.cylinder_pos:
-            target_ID = p.loadURDF(self.cylinder,
-                                pos,
-                                p.getQuaternionFromEuler([0, 0, 0]),
-                                physicsClientId=self.CLIENT
-                                )
-            self.target_IDs.append(target_ID)
-            p.setCollisionFilterGroupMask(target_ID, -1, group2, 1, physicsClientId=self.CLIENT)
-
-        ###########################################################
-
-        # 타겟과 드론 사이의 거리 계산
-        self.prev_distance_to_target = np.linalg.norm(self.INIT_XYZS_random - self.TARGET_POS, axis=1)
-
-        # # 타겟과 드론 사이의 x 좌표 거리 계산
-        # self.prev_distance_to_target = (self.TARGET_POS[0] - self.INIT_XYZS_random[:,0])
-
-    def generate_random_position(self):
-        # return [random.uniform(-1.2, 0), random.uniform(-2.0, 2.0), 1]  # 10 agents
-        return [random.uniform(-1.2, 0), random.uniform(-0.2*self.NUM_DRONES, 0.2*self.NUM_DRONES), 1]  # 10 agents
-
-    def distance(self, pos1, pos2):
-        return np.linalg.norm(np.array(pos1) - np.array(pos2))
     
-    def _getDroneLiDAR(self, nth_drone):
-        """Returns the LiDAR readings from the n-th drone POV.
-
-        Parameters
-        ----------
-        nth_drone : int
-            The ordinal number/position of the desired drone in list self.DRONE_IDS.
-
-        Returns
-        -------
-        ndarray 
-            (self.NUM_LIDAR_RAYS,)-shaped array of floats containing the LiDAR readings from the n-th drone POV.
-
-        """
-        if self.NUM_LIDAR_RAYS is None:
-            print("[ERROR] in BaseAviary._getDroneLiDAR(), remember to set self.NUM_LIDAR_RAYS")
-            exit()
-
-        #### Compute the LiDAR rays' directions ####################
-        rot_mat = np.array(p.getMatrixFromQuaternion(self.quat[nth_drone, :])).reshape(3, 3)
-        lidar_ray_dir = np.zeros((self.NUM_LIDAR_RAYS, 3))
-        for i in range(self.NUM_LIDAR_RAYS):
-            lidar_ray_dir[i, :] = np.dot(rot_mat, np.array([self.LIDAR_RANGE * np.cos(i * 2 * np.pi / self.NUM_LIDAR_RAYS),
-                                                            self.LIDAR_RANGE * np.sin(i * 2 * np.pi / self.NUM_LIDAR_RAYS), 0]))
-
-        
-        #### Compute the LiDAR rays' collisions ####################
-        ray_from = np.tile(self.pos[nth_drone, :], (self.NUM_LIDAR_RAYS, 1))
-        ray_to = lidar_ray_dir + ray_from
-        lidar_rays = p.rayTestBatch(rayFromPositions=ray_from.tolist(),
-                                    rayToPositions=ray_to.tolist(),
-                                    physicsClientId=self.CLIENT
-                                    )
-        
-        lidar_rays = np.array([lidar_rays[i][2] for i in range(self.NUM_LIDAR_RAYS)])
-        lidar_rays = np.array([lidar_rays[i] if lidar_rays[i] != -1 else 1 for i in range(self.NUM_LIDAR_RAYS)])
-        # print("lidar_rays : ", lidar_rays)
-
-        
-        return lidar_rays
-
-
-
     ################################################################################
 
-    ############################################ 바꾼 부분 ###################################################################################################################
     def reset(self,
               seed : int = None,
               options : dict = None):
@@ -476,39 +239,12 @@ class BaseAviary(gym.Env):
             in each subclass for its format.
 
         """
-        self.RESULTS['num_pass_gap'] = []
-        self.RESULTS['average_distance_to_flock_center'] = []
-        ##########################################save the results##################################################################################################################
-        # if self.NUM_EPISODES%10 == 0 and self.NUM_EPISODES != 0:
-        #     print("save the results")
-        #     headers = list(self.RESULTS.keys())
-        
-        #     filename = '~/Research/Quadrotor/Swarm-Narrow-Gaps/experiments/learning/ppt_results/' + str(self.NUM_DRONES) + 'drones_' + str(self.NUM_EPISODES) + '_results.csv'
-        #     filename = os.path.expanduser(filename)
-        
-        #     with open(filename, 'w', newline='', encoding='utf-8') as csv_file:
-        #         writer = csv.DictWriter(csv_file, fieldnames=headers)
-        #         writer.writeheader()
-        
-        #         # 각 행에 대한 데이터를 쓰기
-        #         for i in range(len(self.RESULTS['num_pass_gap'])):  # 'name' 필드의 길이를 기준으로 합니다
-        #             row = {header: self.RESULTS[header][i] for header in headers}
-        #             writer.writerow(row)
-        
-        # self.NUM_EPISODES += 1
-        # print("NUM_EPISODES : ", self.NUM_EPISODES)
-        ###################################################################################################################################################################################
 
-        # self.NUM_DRONES += 1
+        # TODO : initialize random number generator with seed
 
-        # self._ctrl_init()
-        # self.ctrl = [DSLPIDControl(drone_model=DroneModel.CF2X) for i in range(self.NUM_DRONES)]
-        
         p.resetSimulation(physicsClientId=self.CLIENT)
         #### Housekeeping ##########################################
         self._housekeeping()
-
-        self._get_randomized_target()
         #### Update and store the drones kinematic information #####
         self._updateAndStoreKinematicInformation()
         #### Start video recording #################################
@@ -602,7 +338,6 @@ class BaseAviary(gym.Env):
                                                           ) for i in range(self.NUM_DRONES)]
         #### Save, preprocess, and clip the action to the max. RPM #
         else:
-            # self._saveLastAction(action)
             clipped_action = np.reshape(self._preprocessAction(action), (self.NUM_DRONES, 4))
         #### Repeat for as many as the aggregate physics steps #####
         for _ in range(self.PYB_STEPS_PER_CTRL):
@@ -645,12 +380,6 @@ class BaseAviary(gym.Env):
         info = self._computeInfo()
         #### Advance the step counter ##############################
         self.step_counter = self.step_counter + (1 * self.PYB_STEPS_PER_CTRL)
-
-        # self._visualize_paths()
-        # return obs, reward, terminated, truncated, info
-        # print("terminated: ", terminated)
-        # print("truncated: ", truncated)
-        # print("info: ", info)
         return obs, reward, terminated, truncated, info
 
     ################################################################################
@@ -726,24 +455,6 @@ class BaseAviary(gym.Env):
         in the `reset()` function.
 
         """
-
-        ############## 처음 드론 스폰할 때 위치를 랜덤으로 설정##################################################################################################################################################################
-        
-        self.INIT_XYZS_random = np.zeros((self.NUM_DRONES, 3))
-
-        spawned_positions = []
-
-        for i in range(self.NUM_DRONES):
-            while True:
-                new_position = self.generate_random_position()
-                # if all(distance(new_position, pos) >= self.COLLISION_R*10 for pos in spawned_positions): # 드론 간 거리 0.6
-                if all(self.distance(new_position, pos) >= self.COLLISION_R * 10 for pos in spawned_positions):  # 드론 간 거리 0.6
-                # if all(distance(new_position, pos) >= 0.5 for pos in spawned_positions):  # 드론 간 거리 0.5
-                    spawned_positions.append(new_position)
-                    self.INIT_XYZS_random[i] = new_position
-                    # print("self.INIT_XYZS_random{}: {}".format(i, self.INIT_XYZS_random[i]))
-                    break
-
         #### Initialize/reset counters and zero-valued variables ###
         self.RESET_TIME = time.time()
         self.step_counter = 0
@@ -754,7 +465,6 @@ class BaseAviary(gym.Env):
         self.GUI_INPUT_TEXT = -1*np.ones(self.NUM_DRONES)
         self.USE_GUI_RPM=False
         self.last_input_switch = 0
-        # self.last_action = -1 * np.ones((self.NUM_DRONES, 4))
         self.last_clipped_action = np.zeros((self.NUM_DRONES, 4))
         self.gui_input = np.zeros(4)
         #### Initialize the drones kinemaatic information ##########
@@ -774,7 +484,7 @@ class BaseAviary(gym.Env):
         self.PLANE_ID = p.loadURDF("plane.urdf", physicsClientId=self.CLIENT)
 
         self.DRONE_IDS = np.array([p.loadURDF(pkg_resources.resource_filename('gym_pybullet_drones', 'assets/'+self.URDF),
-                                              self.INIT_XYZS_random[i,:],
+                                              self.INIT_XYZS[i,:],
                                               p.getQuaternionFromEuler(self.INIT_RPYS[i,:]),
                                               flags = p.URDF_USE_INERTIA_FROM_FILE,
                                               physicsClientId=self.CLIENT
@@ -791,13 +501,9 @@ class BaseAviary(gym.Env):
         #### E.g., to start a drone at [0,0,0] #####################
         # for i in range(self.NUM_DRONES):
             # p.setCollisionFilterPair(bodyUniqueIdA=self.PLANE_ID, bodyUniqueIdB=self.DRONE_IDS[i], linkIndexA=-1, linkIndexB=-1, enableCollision=0, physicsClientId=self.CLIENT)
-        # if self.OBSTACLES:
-        #     self._addObstacles()
-
-        self.prev_pos = np.zeros((1, self.NUM_DRONES, 3))
-        for i in range(self.NUM_DRONES):
-            self.prev_pos[0, i, :] = self.INIT_XYZS_random[i]
-
+        if self.OBSTACLES:
+            self._addObstacles()
+    
     ################################################################################
 
     def _updateAndStoreKinematicInformation(self):
@@ -1205,33 +911,6 @@ class BaseAviary(gym.Env):
         if np.any(np.abs(action) > 1):
             print("\n[ERROR] it", self.step_counter, "in BaseAviary._normalizedActionToRPM(), out-of-bound action")
         return np.where(action <= 0, (action+1)*self.HOVER_RPM, self.HOVER_RPM + (self.MAX_RPM - self.HOVER_RPM)*action) # Non-linear mapping: -1 -> 0, 0 -> HOVER_RPM, 1 -> MAX_RPM`
-
-    ################################################################################
-
-    # def _saveLastAction(self,
-    #                     action
-    #                     ):
-    #     """Stores the most recent action into attribute `self.last_action`.
-
-    #     The last action can be used to compute aerodynamic effects.
-    #     The method disambiguates between array and dict inputs
-    #     (for single or multi-agent aviaries, respectively).
-
-    #     Parameters
-    #     ----------
-    #     action : ndarray | dict
-    #         (4)-shaped array of ints (or dictionary of arrays) containing the current RPMs input.
-
-    #     """
-    #     if isinstance(action, collections.abc.Mapping):
-    #         for k, v in action.items():
-    #             res_v = np.resize(v, (
-    #             1, 4))  # Resize, possibly with repetition, to cope with different action spaces in RL subclasses
-    #             self.last_action[int(k), :] = res_v
-    #     else:
-    #         res_action = np.resize(action, (
-    #         1, 4))  # Resize, possibly with repetition, to cope with different action spaces in RL subclasses
-    #         self.last_action = np.reshape(res_action, (self.NUM_DRONES, 4))
 
     ################################################################################
 

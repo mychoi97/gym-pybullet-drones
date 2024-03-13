@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<robot name="cylinder">
+  <link name="base_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1.0"/>
+      <!-- Adjust the inertia values for a cylinder -->
+      <inertia ixx="0.1" ixy="0" ixz="0" iyy="0.1" iyz="0" izz="0.1"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <!-- Define the cylinder with its radius and height -->
+        <cylinder radius="0.25" length="1.5"/>
+      </geometry>
+      <material name="white">
+        <color rgba="1 1 1 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <!-- Use the same cylinder definition for collision -->
+        <cylinder radius="0.25" length="1.5"/>
+      </geometry>
+    </collision>
+  </link>
+</robot>
